@@ -4,3 +4,18 @@
 #MEEN 357 - 505
 #Group 1 Project Phase 1
 
+#define constants
+
+r = 0.30    #m #wheel radius
+wm = 1.0    #kg #wheel mass
+t_s = 170   #Nm #motor stall torque
+t_nl = 0    #Nm #motor no-load torque
+w_nl = 3.80 #rad/s #motor no-load speed
+mm = 5.9    #kg #motor mass
+spm = 75    #kg #science payload mass
+rtgm = 90   #kg #RTG mass (power subsystem)
+cm = 659    #kg #chassis mass (mass of rover structure)
+d1 = 0.04   #m #speed reducer pinion diameter 
+d2 = 0.07   #m #speed reducer gear diameter 
+srm = 1.5   #kg #speed reducer mass 
+gmars = 3.72#m/s^2 #acceleration due to gravity 
