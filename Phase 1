@@ -4,6 +4,11 @@
 #MEEN 357 - 505
 #Group 1 Project Phase 1
 
+
+################################################
+# START OF SUBSCRIPTS.PY
+################################################
+
 import numpy as np
 import math
 
@@ -195,3 +200,123 @@ print("\nthe rolling resistance force of the rover =",F_rr,"N")
     
 F = F_net(omega, terrain_angle, rover, planet, Crr)
 print("\nthe net force of the rover =",F,"N")
+
+
+######################################################################
+#SUBSCRIPTS.PY ENDS HERE AND NOW GRAPHS_MOTOR.PY STARTS
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import*
+
+
+    
+omega = np.linspace(0,3.8,10)
+#print('omega =',omega)
+terrain_angle_deg = np.linspace(-10,35,10)
+terrain_angle =  np.linspace(-10,35,10) * (math.pi)/180
+#print('\nterrain_angle_deg =',terrain_angle_deg)
+Crr = -0.2
+Crr = abs(Crr)
+
+m = get_mass(rover)
+Ng = get_gear_ratio(speed_reducer)
+tau = tau_dcmotor(omega, motor)
+Fd = F_drive(omega, rover)
+Fgt = F_gravity(terrain_angle, rover, planet)
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+
+
+omega = list(omega)
+
+
+P = []
+for i in range(len(tau)):
+    P.append(omega[i]*tau[i])
+
+plt.subplot(311)
+plt.plot(tau, omega)
+plt.xlabel("tau [Nm]")
+plt.ylabel("omega [rad/s]")
+plt.title("motor shaft speed vs. motor shaft torque")
+
+plt.subplot(312)
+plt.plot(tau, P)
+plt.xlabel("tau [Nm]")
+plt.ylabel("P [W]")
+plt.title("motor power vs. motor shaft torque")
+
+plt.subplot(313)
+plt.plot(omega, P)
+plt.xlabel("omega [rad/s]")
+plt.ylabel("P [W]")
+plt.title("motor power vs. motor shaft speed")
+
+plt.tight_layout()
+
+######################################################################
+#GRAPHS_MOTOR.PY ENDS HERE AND NOW GRAPHS_SR.PY STARTS
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import*
+
+
+    
+omega = np.linspace(0,3.8,10)
+#print('omega =',omega)
+terrain_angle_deg = np.linspace(-10,35,10)
+terrain_angle =  np.linspace(-10,35,10) * (math.pi)/180
+#print('\nterrain_angle_deg =',terrain_angle_deg)
+Crr = -0.2
+Crr = abs(Crr)
+
+m = get_mass(rover)
+Ng = get_gear_ratio(speed_reducer)
+tau = tau_dcmotor(omega, motor)
+Fd = F_drive(omega, rover)
+Fgt = F_gravity(terrain_angle, rover, planet)
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+
+tau_out = []
+for i in tau:
+    tau_out.append(i*Ng)
+
+
+omega_out = []
+for i in omega:
+    omega_out.append(i/Ng)
+
+
+P_out = []
+for i in range(len(tau_out)):
+    P_out.append(omega_out[i]*tau_out[i])
+
+
+plt.subplot(311)
+plt.plot(tau_out, omega_out)
+plt.xlabel("tau [Nm]")
+plt.ylabel("omega [rad/s]")
+plt.title("speed reducer shaft speed vs. speed reducer shaft torque")
+
+plt.subplot(312)
+plt.plot(tau_out, P_out)
+plt.xlabel("tau [Nm]")
+plt.ylabel("P [W]")
+plt.title("speed reducer shaft power vs. speed reducer shaft torque")
+
+
+plt.subplot(313)
+plt.plot(omega_out, P_out)
+plt.xlabel("omega [rad/s]")
+plt.ylabel("P [W]")
+plt.title(" speed reducer shaft power vs. speed reducer shaft speed")
+
+plt.tight_layout()
+
