@@ -4,18 +4,160 @@
 #MEEN 357 - 505
 #Group 1 Project Phase 1
 
+import numpy as np
+import math
+
 #define constants
 
-r = 0.30    #m #wheel radius
-wm = 1.0    #kg #wheel mass
-t_s = 170   #Nm #motor stall torque
-t_nl = 0    #Nm #motor no-load torque
-w_nl = 3.80 #rad/s #motor no-load speed
-mm = 5.9    #kg #motor mass
-spm = 75    #kg #science payload mass
-rtgm = 90   #kg #RTG mass (power subsystem)
-cm = 659    #kg #chassis mass (mass of rover structure)
-d1 = 0.04   #m #speed reducer pinion diameter 
-d2 = 0.07   #m #speed reducer gear diameter 
-srm = 1.5   #kg #speed reducer mass 
-gmars = 3.72#m/s^2 #acceleration due to gravity 
+#r = 0.30    #m #wheel radius
+#wm = 1.0    #kg #wheel mass
+#t_s = 170   #Nm #motor stall torque
+#t_nl = 0    #Nm #motor no-load torque
+#w_nl = 3.80 #rad/s #motor no-load speed
+#mm = 5.9    #kg #motor mass
+#spm = 75    #kg #science payload mass
+#rtgm = 90   #kg #RTG mass (power subsystem)
+#cm = 659    #kg #chassis mass (mass of rover structure)
+#d1 = 0.04   #m #speed reducer pinion diameter 
+#d2 = 0.07   #m #speed reducer gear diameter 
+#srm = 1.5   #kg #speed reducer mass 
+#gmars = 3.72#m/s^2 #acceleration due to gravity 
+
+
+rover = {'wheel_assembly':{'wheel':{'radius': 0.30 , 'mass': 1.0},
+                           'speed_reducer':{'type': 'reverted' , 'diam_pinion': 0.04 , 'diam_gear': 0.07 , 'mass': 1.5}, 
+                           'motor':{'torque_stall': 170 , 'torque_noload': 0 , 'speed_noload': 3.80 , 'mass': 5.0}}, 
+         'chassis':{'mass': 659}, 
+         'science_payload':{'mass': 75}, 
+         'power_subsys':{'mass': 90}}
+wheel_assembly = {'wheel':{'radius': 0.30 , 'mass': 1.0},
+                  'speed_reducer':{'type': 'reverted' , 'diam_pinion': 0.04 , 'diam_gear': 0.07 , 'mass': 1.5}, 
+                  'motor':{'torque_stall': 170 , 'torque_noload': 0 , 'speed_noload': 3.80 , 'mass': 5.0}}
+speed_reducer = {'type': 'reverted' , 'diam_pinion': 0.04 , 'diam_gear': 0.07 , 'mass': 1.5}
+motor = {'torque_stall': 170 , 'torque_noload': 0 , 'speed_noload': 3.80 , 'mass': 5.9}
+planet = {'g': 3.72}
+
+
+def get_mass(rover):
+    if type(rover) != dict:
+        raise Exception()
+    m = 6*rover['wheel_assembly']['wheel']['mass']+ 6*rover['wheel_assembly']['speed_reducer']['mass']+ 6*rover['wheel_assembly']['motor']['mass']+ rover['chassis']['mass']+ rover['science_payload']['mass']+ rover['power_subsys']['mass']
+    return m
+    
+
+def get_gear_ratio(speed_reducer):
+    if type(speed_reducer) != dict:
+        raise Exception()
+    if rover['wheel_assembly']['speed_reducer']['type'] != 'reverted' :
+        print('''Error: 'type' field is not "reverted"''')
+        
+    Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer']['diam_pinion'])**2
+    return Ng
+
+
+def tau_dcmotor(omega, motor):
+    if type(omega) != float:
+        raise Exception()
+    if type(motor) != dict:
+        raise Exception()
+    tau = motor['torque_stall'] - ((motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload'])*omega
+    return tau
+
+
+def F_drive(omega, rover):
+    tau = tau_dcmotor(omega, motor)
+    if type(omega) != float:
+        raise Exception()
+    if type(rover) != dict:
+        raise Exception()
+    Fd = 6*tau / rover['wheel_assembly']['wheel']['radius']
+    return Fd
+    
+
+def F_gravity(terrain_angle, rover, planet):
+    if type(terrain_angle) != float:
+        raise Exception()
+    if terrain_angle < -75:
+        raise Exception()
+    if terrain_angle > 75:
+        raise Exception()
+    if type(rover) != dict:
+        raise Exception()
+    if type(planet) !=dict:
+        raise Exception()
+    m = get_mass(rover)
+    gmars = planet['g']
+    Fgt = m*gmars*math.sin(terrain_angle)
+    return Fgt
+    
+
+def F_rolling(omega, terrain_angle, rover, planet, Crr):
+    m = get_mass(rover)
+    Ng = get_gear_ratio(speed_reducer)
+    if type(omega) != float:
+        raise Exception()
+    if type(terrain_angle) != float:
+        raise Exception()
+    if terrain_angle < -75:
+        raise Exception()
+    if terrain_angle > 75:
+        raise Exception()
+    if type(rover) != dict:
+        raise Exception()
+    if type(planet) !=dict:
+        raise Exception()
+    gmars = planet['g']
+    Fn = m*gmars*math.cos(terrain_angle)
+    Frrsimple = Crr*Fn
+    Frr = math.erf(40*V_rover)*Frrsimple
+    return Frr
+
+
+def F_net(omega, terrain_angle, rover, planet, Crr):
+    Fd = F_drive(omega, rover)
+    Fgt = F_gravity(terrain_angle, rover, planet)
+    Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+    if type(omega) != float:
+        raise Exception()
+    if type(terrain_angle) != float:
+        raise Exception()
+    if terrain_angle < -75:
+        raise Exception()
+    if terrain_angle > 75:
+        raise Exception()
+    if type(rover) != dict:
+        raise Exception()
+    if type(planet) !=dict:
+        raise Exception()
+    F_x = Fd -Frr
+    F_y = Fgt
+    return F_x, F_y
+
+    
+omega = 1.0
+terrain_angle = 30.0 * (math.pi)/180
+Crr = -10
+Crr = abs(Crr)
+V_rover = 10
+
+
+m = get_mass(rover)
+print('rover mass =',m, 'kg')
+
+Ng = get_gear_ratio(speed_reducer)
+print('\nthe gear ratio =',Ng)
+
+tau = tau_dcmotor(omega, motor)
+print('\nthe motor shaft torque =',tau,'Nm')
+
+Fd = F_drive(omega, rover)
+print('\nthe drive force =',Fd,'N')
+
+Fgt = F_gravity(terrain_angle, rover, planet)
+print("\nthe gravitational force of the rover =", Fgt, "N")
+
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+print("\nthe rolling resistance force of the rover =",F_rr,"N")
+    
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+print("\nthe net force in the x direction is the first number and the y direction is the second number",F)
