@@ -1,0 +1,445 @@
+#Matthew Nguyen
+#Ryan Galley
+#Cory Chapman
+#MEEN 357 - 505
+#Group 1 Project Phase 1
+
+
+################################################
+# START OF SUBSCRIPTS.PY
+################################################
+
+import numpy as np
+import math
+
+# define constants
+
+# r = 0.30    #m #wheel radius
+# wm = 1.0    #kg #wheel mass
+# t_s = 170   #Nm #motor stall torque
+# t_nl = 0    #Nm #motor no-load torque
+# w_nl = 3.80 #rad/s #motor no-load speed
+# mm = 5.9    #kg #motor mass
+# spm = 75    #kg #science payload mass
+# rtgm = 90   #kg #RTG mass (power subsystem)
+# cm = 659    #kg #chassis mass (mass of rover structure)
+# d1 = 0.04   #m #speed reducer pinion diameter
+# d2 = 0.07   #m #speed reducer gear diameter
+# srm = 1.5   #kg #speed reducer mass
+# gmars = 3.72#m/s^2 #acceleration due to gravity
+
+
+rover = {'wheel_assembly': {'wheel': {'radius': 0.30, 'mass': 1.0},
+                            'speed_reducer': {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5},
+                            'motor': {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.0}},
+         'chassis': {'mass': 659},
+         'science_payload': {'mass': 75},
+         'power_subsys': {'mass': 90}}
+wheel_assembly = {'wheel': {'radius': 0.30, 'mass': 1.0},
+                  'speed_reducer': {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5},
+                  'motor': {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.0}}
+speed_reducer = {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5}
+motor = {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.9}
+planet = {'g': 3.72}
+
+
+def get_mass(rover):
+    if type(rover) != dict:
+        raise Exception("rover is not a dictionary")
+    else:
+        m = 6 * rover['wheel_assembly']['wheel']['mass'] + 6 * rover['wheel_assembly']['speed_reducer']['mass'] + 6 * \
+            rover['wheel_assembly']['motor']['mass'] + rover['chassis']['mass'] + rover['science_payload']['mass'] + \
+            rover['power_subsys']['mass']
+        return m
+
+
+def get_gear_ratio(speed_reducer):
+    if type(speed_reducer) != dict:
+        raise Exception("Speed Reducer is not a dictionary")
+    if rover['wheel_assembly']['speed_reducer']['type'] != 'reverted':
+        print('''Error: 'type' field is not "reverted"''')
+    else:
+        Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer'][
+            'diam_pinion']) ** 2
+        return Ng
+
+
+def tau_dcmotor(omega, motor):
+    isomegafloat = type(omega)
+    if not isinstance(omega, (int, float, np.ndarray)):
+        raise Exception("omega must be a scalar or vector")
+    if type(motor) != dict:
+        raise Exception("motor is not a dictionary")
+    if type(omega) == np.ndarray:
+        o_list = np.array([])
+        for i in np.nditer(omega):
+            if i > motor['speed_noload']:
+                tau = 0
+            elif i < 0:
+                tau = motor['torque_stall']
+            else:
+                tau = motor['torque_stall'] - ((motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload']) * i
+            o_list = np.append(o_list, tau)
+        tau = o_list
+    else:
+        if omega > motor['speed_noload']:
+            tau = 0
+        elif omega < 0:
+            tau = motor['torque_stall']
+        else:
+            tau = motor['torque_stall'] - ((motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload']) * omega
+    tau = np.array(tau)
+    return tau
+
+def F_drive(omega, rover):
+    Fd = []
+    Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer'][
+            'diam_pinion']) ** 2
+    if not isinstance(omega, (int, float, np.ndarray)):
+        raise Exception("omega must be a scalar or vector")
+    if type(rover) != dict:
+        raise Exception("rover is not a dictionary")
+    if type(omega) == np.ndarray:
+        for i in omega:
+            tin = tau_dcmotor(i, motor)
+            tout = Ng * np.array(tin)
+            Fdrive = 6 * tout / rover['wheel_assembly']['wheel']['radius']
+            Fd.append(Fdrive)
+    else:
+        tin = tau_dcmotor(omega,motor)
+        tout = Ng * np.array(tin)
+        Fd.append(
+            6 * tout/ rover['wheel_assembly']['wheel']['radius'])
+    Fd = np.array(Fd)
+    return Fd
+
+
+def F_gravity(terrain_angle, rover, planet):
+    if not isinstance(terrain_angle, (int, float, np.ndarray)):
+        raise Exception("Terrain Angle must be a scalar or vector")
+    for i in np.nditer(terrain_angle):
+        if i < -75:
+            raise Exception("terrain angle is less than -75 degrees")
+        if i > 75:
+            raise Exception("terrain angle is more than -75 degrees")
+    if type(rover) != dict:
+        raise Exception("rover is not a dictionary")
+    if type(planet) != dict:
+        raise Exception("planet is not a dictionary")
+    else:
+        m = get_mass(rover)
+        gmars = planet['g']
+        Fgt = []
+        for i in np.nditer(terrain_angle):
+            Fgt_point = m * gmars * math.sin(i)
+            Fgt_point = -Fgt_point
+            Fgt.append(Fgt_point)
+        return Fgt
+
+
+def F_rolling(omega, terrain_angle, rover, planet, Crr):
+    m = get_mass(rover)
+    Ng = get_gear_ratio(speed_reducer)
+    if not isinstance(omega, (int, float, np.ndarray)):
+        raise Exception("omega must be a scalar or vector")
+    if not isinstance(terrain_angle, (int, float, np.ndarray)):
+        raise Exception("Terrain Angle must be a scalar or vector")
+    for i in np.nditer(terrain_angle):
+        if i < -75:
+            raise Exception("terrain angle is less than -75 degrees")
+        if i > 75:
+            raise Exception("terrain angle is more than -75 degrees")
+    if type(rover) != dict:
+        raise Exception("rover is not a dictionary")
+    if type(planet) != dict:
+        raise Exception("planet is not a dictionary")
+    else:
+        gmars = planet['g']
+        V_rover = []
+        if type(omega) == np.ndarray:
+            for i in np.nditer(omega):
+                V_rov = rover['wheel_assembly']['wheel']['radius'] * i / Ng
+                V_rover.append(V_rov)
+        Fn = []
+        for i in np.nditer(terrain_angle):
+            Fn_point = m * gmars * math.cos(i)
+            Fn.append(Fn_point)
+        Frrsimple = []
+        for i in Fn:
+            Frrsimple.append(Crr * i)
+        Frr = []
+        for i in range(len(Frrsimple)-1):
+            Frr.append(-1 * (math.erf(40 * V_rover[i]) * Frrsimple[i]))
+        return Frr
+
+def F_net(omega, terrain_angle, rover, planet, Crr):
+    Fd = F_drive(omega, rover)
+    Fgt = F_gravity(terrain_angle, rover, planet)
+    Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+    if not isinstance(omega, (int, float, np.ndarray)):
+        raise Exception("omega must be a scalar or vector")
+    if not isinstance(terrain_angle, (int, float, np.ndarray)):
+        raise Exception("terrain angle must be a scalar or vector")
+    for i in np.nditer(terrain_angle):
+        if i < -75:
+            raise Exception("terrain angle is less than -75 degrees")
+        if i > 75:
+            raise Exception("terrain angle is more than -75 degrees")
+    if type(rover) != dict:
+        raise Exception("rover is not a dictionary")
+    if type(planet) != dict:
+        raise Exception("planet is not a dictionary")
+    else:
+        F = []
+        for i in range(len(Fd)-1):
+            x = Fd[i] + Frr[i] + Fgt[i]
+            F.append(x)
+        return F
+
+
+omega = np.linspace(1, 3.8, 10)
+print('omega =', omega)
+terrain_angle_deg = np.linspace(-10, 35, 10)
+terrain_angle = np.linspace(-10, 35, 10) * (math.pi) / 180
+print('\nterrain_angle_deg =', terrain_angle_deg)
+Crr = -0.2
+Crr = abs(Crr)
+
+m = get_mass(rover)
+print('\nrover mass =', m, 'kg')
+
+Ng = get_gear_ratio(speed_reducer)
+print('\nthe gear ratio =', Ng)
+
+tau = tau_dcmotor(omega, motor)
+print('\nthe motor shaft torque =', tau, 'Nm')
+
+Fd = F_drive(omega, rover)
+print('\nthe drive force =', Fd, 'N')
+
+Fgt = F_gravity(terrain_angle, rover, planet)
+print("\nthe gravitational force of the rover =", Fgt, "N")
+
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+print("\nthe rolling resistance force of the rover =", F_rr, "N")
+
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+print("\nthe net force of the rover =", F, "N")
+
+
+######################################################################
+#SUBSCRIPTS.PY ENDS HERE AND NOW GRAPHS_MOTOR.PY STARTS
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import*
+
+
+    
+omega = np.linspace(0,3.8,10)
+#print('omega =',omega)
+terrain_angle_deg = np.linspace(-10,35,10)
+terrain_angle =  np.linspace(-10,35,10) * (math.pi)/180
+#print('\nterrain_angle_deg =',terrain_angle_deg)
+Crr = -0.2
+Crr = abs(Crr)
+
+m = get_mass(rover)
+Ng = get_gear_ratio(speed_reducer)
+tau = tau_dcmotor(omega, motor)
+Fd = F_drive(omega, rover)
+Fgt = F_gravity(terrain_angle, rover, planet)
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+
+
+omega = list(omega)
+
+
+P = []
+for i in range(len(tau)):
+    P.append(omega[i]*tau[i])
+
+plt.subplot(311)
+plt.plot(tau, omega)
+plt.xlabel("tau [Nm]")
+plt.ylabel("omega [rad/s]")
+plt.title("motor shaft speed vs. motor shaft torque")
+
+plt.subplot(312)
+plt.plot(tau, P)
+plt.xlabel("tau [Nm]")
+plt.ylabel("P [W]")
+plt.title("motor power vs. motor shaft torque")
+
+plt.subplot(313)
+plt.plot(omega, P)
+plt.xlabel("omega [rad/s]")
+plt.ylabel("P [W]")
+plt.title("motor power vs. motor shaft speed")
+
+plt.tight_layout()
+
+######################################################################
+#GRAPHS_MOTOR.PY ENDS HERE AND NOW GRAPHS_SR.PY STARTS
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import*
+
+
+    
+omega = np.linspace(0,3.8,10)
+#print('omega =',omega)
+terrain_angle_deg = np.linspace(-10,35,10)
+terrain_angle =  np.linspace(-10,35,10) * (math.pi)/180
+#print('\nterrain_angle_deg =',terrain_angle_deg)
+Crr = -0.2
+Crr = abs(Crr)
+
+m = get_mass(rover)
+Ng = get_gear_ratio(speed_reducer)
+tau = tau_dcmotor(omega, motor)
+Fd = F_drive(omega, rover)
+Fgt = F_gravity(terrain_angle, rover, planet)
+F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+F = F_net(omega, terrain_angle, rover, planet, Crr)
+
+tau_out = []
+for i in tau:
+    tau_out.append(i*Ng)
+
+
+omega_out = []
+for i in omega:
+    omega_out.append(i/Ng)
+
+
+P_out = []
+for i in range(len(tau_out)):
+    P_out.append(omega_out[i]*tau_out[i])
+
+
+plt.subplot(311)
+plt.plot(tau_out, omega_out)
+plt.xlabel("tau [Nm]")
+plt.ylabel("omega [rad/s]")
+plt.title("speed reducer shaft speed vs. speed reducer shaft torque")
+
+plt.subplot(312)
+plt.plot(tau_out, P_out)
+plt.xlabel("tau [Nm]")
+plt.ylabel("P [W]")
+plt.title("speed reducer shaft power vs. speed reducer shaft torque")
+
+
+plt.subplot(313)
+plt.plot(omega_out, P_out)
+plt.xlabel("omega [rad/s]")
+plt.ylabel("P [W]")
+plt.title(" speed reducer shaft power vs. speed reducer shaft speed")
+
+plt.tight_layout()
+
+
+######################################################################
+# GRAPHS_SR.PY ENDS HERE AND ANALYSIS_TERRAIN_SLOPE STARTS HERE
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import *
+from scipy import optimize
+
+Crr = -0.2
+Crr = abs(Crr)
+slope_array_deg = np.linspace(-10,35,25)
+slope_array = np.linspace(-10,35,25) * (math.pi)/ 180
+def F_net_fun(omega, Crr):
+    return F_net(omega, 0, rover, planet, Crr)
+
+wheel_radius = rover['wheel_assembly']['wheel']['radius']
+win_maxes = np.array([optimize.bisect(F_net_fun, 0, 3.8, args=(i,)) for i in slope_array])
+
+v_max = win_maxes * wheel_radius
+
+
+plt.plot(v_max, slope_array_deg)
+plt.xlabel("maximum velocity [m/s]")
+plt.ylabel("angle of slope [degrees]")
+plt.title("Max Speed of Rover at Various Terrain Slopes")
+plt.show()
+
+
+######################################################################
+# ANALYSIS_TERRAIN_SLOPE ENDS HERE AND ANALYSIS_ROLLING_RESISTANCE STARTS HERE
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import *
+from scipy import optimize
+
+def F_net_fun(omega, Crr):
+    return F_net(omega, 0, rover, planet, Crr)
+
+Crr_array = np.linspace(0.01,0.4,25)
+wheel_radius = rover['wheel_assembly']['wheel']['radius']
+win_maxes = np.array([optimize.bisect(F_net_fun, 0, 3.8, args=(i,)) for i in Crr_array])
+
+v_max = win_maxes * wheel_radius
+
+
+plt.plot(Crr_array, v_max)
+plt.xlabel("Coefficient of Rolling Resistance")
+plt.ylabel("Maximum Velocity [m/s]")
+plt.title("Max Speed of Rover at Various Coefficients of Rolling Resistance")
+plt.grid()
+plt.show()
+
+######################################################################
+# ANALYSIS_ROLLING_RESISTANCE ENDS HERE AND ANALYSIS_COMBINED_TERRAIN STARTS HERE
+######################################################################
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+from subfunctions import *
+from scipy import optimize
+
+Crr_array = np.linspace(0.01,0.4,25)
+slope_array_deg = np.linspace(-10,35,25)
+
+CRR, SLOPE = np.meshgrid(Crr_array, slope_array_deg)
+
+VMAX = np.zeros(np.shape(CRR), dtype = float)
+
+
+def F_net_fun(omega, Crr):
+    return F_net(omega, 0, rover, planet, Crr)
+
+wheel_radius = rover['wheel_assembly']['wheel']['radius']
+
+
+N = np.shape(CRR)[0]
+for i in range(N):
+    for j in range(N):
+        Crr_sample = float(CRR[i,j])
+        slope_sample = float(SLOPE[i,j])
+        win_maxes = np.array([optimize.bisect(F_net_fun, 0, 3.8, args=(i,)) for i in Crr_array])
+        VMAX = win_maxes * wheel_radius
+
+figure = plt.pyplot.figure()
+ax = Axes3D(figure, elev = N[1], azim = N[2])
+ax.plot_surface(CRR, SLOPE, VMAX)
+plt.plot(VMAX, Crr_array)
+plt.xlabel("Maximum Velocity [m/s]")
+plt.ylabel("Coefficient of Rolling Resistance")
+plt.title("Max Speed of Rover at Various Coefficients of Rolling Resistance")
+plt.show()
