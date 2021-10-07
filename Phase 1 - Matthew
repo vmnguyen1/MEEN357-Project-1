@@ -1,14 +1,3 @@
-#Matthew Nguyen
-#Ryan Galley
-#Cory Chapman
-#MEEN 357 - 505
-#Group 1 Project Phase 1
-
-
-################################################
-# START OF SUBSCRIPTS.PY
-################################################
-
 import numpy as np
 import math
 
@@ -65,7 +54,6 @@ def get_gear_ratio(speed_reducer):
 
 
 def tau_dcmotor(omega, motor):
-    isomegafloat = type(omega)
     if not isinstance(omega, (int, float, np.ndarray)):
         raise Exception("omega must be a scalar or vector")
     if type(motor) != dict:
@@ -95,8 +83,9 @@ def F_drive(omega, rover):
     Fd = []
     Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer'][
             'diam_pinion']) ** 2
-    if not isinstance(omega, (int, float, np.ndarray)):
-        raise Exception("omega must be a scalar or vector")
+    isomegaarray = isinstance(omega, (np.ndarray))
+    if type(omega) != int and type(omega) != float and not isomegaarray:
+        raise Exception("Omega must be scalar or vector")
     if type(rover) != dict:
         raise Exception("rover is not a dictionary")
     if type(omega) == np.ndarray:
@@ -115,8 +104,9 @@ def F_drive(omega, rover):
 
 
 def F_gravity(terrain_angle, rover, planet):
-    if not isinstance(terrain_angle, (int, float, np.ndarray)):
-        raise Exception("Terrain Angle must be a scalar or vector")
+    isterrainanglearray = isinstance(terrain_angle, (np.ndarray))
+    if not isterrainanglearray and type(terrain_angle) != int and type(terrain_angle) != float:
+        raise Exception("Terrain Angle must be scalar or vector")
     for i in np.nditer(terrain_angle):
         if i < -75:
             raise Exception("terrain angle is less than -75 degrees")
@@ -136,14 +126,18 @@ def F_gravity(terrain_angle, rover, planet):
             Fgt.append(Fgt_point)
         return Fgt
 
-
 def F_rolling(omega, terrain_angle, rover, planet, Crr):
     m = get_mass(rover)
     Ng = get_gear_ratio(speed_reducer)
-    if not isinstance(omega, (int, float, np.ndarray)):
-        raise Exception("omega must be a scalar or vector")
-    if not isinstance(terrain_angle, (int, float, np.ndarray)):
-        raise Exception("Terrain Angle must be a scalar or vector")
+    isterrainanglearray = isinstance(terrain_angle, (np.ndarray))
+    isomegaarray = isinstance(omega, (np.ndarray))
+    if isterrainanglearray and isomegaarray:
+        if len(omega) != len(terrain_angle):
+            raise Exception('Both the omega and terrain angle must be the same length')
+    if type(omega) != int and type(omega) != float and not isomegaarray:
+        raise Exception("Omega must be scalar or vector")
+    if not isterrainanglearray and type(terrain_angle) != int and type(terrain_angle) != float:
+        raise Exception("Terrain Angle must be scalar or vector")
     for i in np.nditer(terrain_angle):
         if i < -75:
             raise Exception("terrain angle is less than -75 degrees")
@@ -153,6 +147,8 @@ def F_rolling(omega, terrain_angle, rover, planet, Crr):
         raise Exception("rover is not a dictionary")
     if type(planet) != dict:
         raise Exception("planet is not a dictionary")
+    if type(Crr) != float and type(Crr) != int and type(Crr) != np.float64:
+        raise Exception("Crr variable must be a scalar")
     else:
         gmars = planet['g']
         V_rover = []
@@ -225,7 +221,6 @@ print("\nthe rolling resistance force of the rover =", F_rr, "N")
 
 F = F_net(omega, terrain_angle, rover, planet, Crr)
 print("\nthe net force of the rover =", F, "N")
-
 
 ######################################################################
 #SUBSCRIPTS.PY ENDS HERE AND NOW GRAPHS_MOTOR.PY STARTS
