@@ -1,0 +1,250 @@
+import numpy as np
+from math import pi, cos, sin
+from scipy import special
+import matplotlib.pyplot as plt
+planet = {'g' : 3.72}
+power_subsys = {'mass' : 90}
+science_payload = {'mass' : 75}
+chassis = {'mass' : 659}
+motor = {'torque_stall' : 170, 'torque_noload' : 0, 'speed_noload' : 3.80, 'mass' : 5}
+speed_reducer = {'type' : 'reverted', 'diam_pinion' : 0.04, 'diam_gear' : 0.07, 'mass' : 1.5}
+wheel = {'radius' : 0.3, 'mass' : 1}
+wheel_assembly = {'wheel' : wheel, 'speed_reducer' : speed_reducer, 'motor' : motor}
+rover = {'wheel_assembly' : wheel_assembly, 'chassis' : chassis, 'science_payload' : science_payload, 'power_subsys' : power_subsys}
+
+Crr_array = np.linspace(0.01,0.4,25)
+terrain_angle = 0
+lb = 0
+ub = 3.8
+
+def bisection(f, lb, ub, max_err, num_i):
+    prev_root = 0
+    approx_root = 0
+    #Input Validation
+    if type(lb) == str or type(ub) == str:
+        raise Exception("Bounds must be a numerical value.")
+    elif num_i <= 0:
+        raise Exception("Number of iterations cannot be negative.")
+    elif lb == ub:
+        raise Exception("Lower bound cannot equal upper bound.")
+    elif lb > ub:
+        raise Exception("Lower bound cannot be greater than upper bound.")
+    elif type(num_i) != int:
+        raise Exception("num_i must be an integer value.")
+    #Bisection Process
+    for i in range(num_i):
+        prev_root = approx_root
+        mp = (ub + lb)/2
+        fL = f(lb)
+        fU = f(ub)
+        fMP = f(mp)
+        if fL * fMP <= 0:
+            ub = mp
+        elif fU * fMP <= 0:
+            lb = mp
+        else: 
+            break
+        approx_root = (ub+lb)/2
+        rel_err = abs(((approx_root-prev_root)/approx_root)*100)
+        if abs(rel_err) <= max_err:
+            return approx_root
+        if i == num_i-1:
+            return approx_root
+
+def get_mass(d):
+    if type(d) != dict:
+        raise Exception("The input argument must be a dictionary.")
+    mass = 0
+    for i in d:
+        if i == 'wheel_assembly':
+            mass += 6*(d['wheel_assembly']['wheel']['mass']+d['wheel_assembly']['speed_reducer']['mass']
+                      +d['wheel_assembly']['motor']['mass'])
+        else:
+            mass += d[i]['mass']
+    return mass
+def get_gear_ratio(d):
+    acceptable_types = ['reverted']
+    if type(d) != dict:
+        raise Exception("The input argument must be a dictionary.")
+    if d['type'].lower() not in acceptable_types:
+        raise Exception("The type of the speed reducer must be reverted.")
+    gear_ratio = (d['diam_gear'] / d['diam_pinion'])**2
+    return gear_ratio
+def tau_dcmotor(n, d):
+    if type(n) == np.ndarray or type(n) == int or type(n) == float:
+        if type(d) == dict:
+            f = lambda x: d['torque_stall'] - ((d['torque_stall'] - d['torque_noload']) / d['speed_noload'])*x
+            tau_vector = np.array([])
+            if type(n) == int or type(n) == float:
+                if n > d['speed_noload']:
+                    tau_vector = np.append(tau_vector, 0)
+                elif n < 0:
+                    tau_vector = np.append(tau_vector, d['torque_stall'])
+                else:
+                    tau_vector = np.append(tau_vector, f(n))
+                return tau_vector
+            elif type(n) == np.ndarray:
+                for i in n:
+                    if i > d['speed_noload']:
+                        tau_vector = np.append(tau_vector, 0)
+                    elif i < 0:
+                        tau_vector = np.append(tau_vector, d['torque_stall'])
+                    else:
+                        tau_vector = np.append(tau_vector, f(i))
+                return tau_vector
+        else:
+            raise Exception("Motor input must be in form of dictionary.")
+    else:
+        print(type(n))
+        raise Exception("Motor shaft speed must be a scalar or a vector.")
+def F_drive(n, d):
+    if type(n) == np.ndarray or type(n) == int or type(n) == float:
+        if type(d) == dict:
+            if type(n) == int or type(n) == float:
+                force_vec = np.array([])
+                tout = get_gear_ratio(speed_reducer)*tau_dcmotor(n, motor)
+                force = 6*(tout / d['wheel_assembly']['wheel']['radius'])
+                force_vec = np.append(force_vec, force)
+            else:
+                force_vec = np.array([])
+                for i in n:
+                    tout = get_gear_ratio(speed_reducer)*tau_dcmotor(float(i), motor)
+                    force = 6*(tout / d['wheel_assembly']['wheel']['radius'])
+                    force_vec = np.append(force_vec, force)
+            return force_vec
+        else:
+            raise Exception("Second argument must be a dictionary.")
+    else:
+        raise Exception("First argument must be a scalar or a vector.")
+def F_gravity(n, d1, d2):
+    
+    mg = get_mass(rover) * d2['g']
+    if type(n) == np.ndarray or type(n) == int or type(n) == float:
+        if type(d1) and type(d2) == dict:
+            if type(n) == np.ndarray:
+                fgt = np.array([])
+                for i in range(len(n)): 
+                    if n[i] <= 75 and n[i] >= -75:
+                        theta = n[i]*pi/180
+                        f = -mg*sin(theta)
+                        fgt = np.append(fgt, f)
+                        
+                    else:
+                        raise Exception("The terrain angles must be between -75 and 75 degrees.")
+                return fgt
+            
+            elif type(n) == int or type(n) == float: 
+                if n <= 75 and n >= -75:
+                    theta = n*pi/180
+                    fgt = -mg*sin(theta)
+                    return fgt
+                else: 
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+        else:
+            raise Exception('Motor input must be in form of dictionary.')
+    else: 
+        raise Exception('The terrain angle must be a scalar or a vector.')                
+def F_rolling(n1, n2, d1, d2, n3):
+    m = get_mass(rover)
+    mg = m * d2['g']
+    crr = n3
+    gr = get_gear_ratio(speed_reducer)
+    
+    if type(n1) and type(n2) == np.ndarray or type(n1) and type(n2) == int or type(n1) and type(n2) == float:
+        if type(d1) and type(d2) == dict:
+            if type(n3) == int or float and n3 > 0:
+                if type(n1) and type(n2) == np.ndarray:
+                    if len(n1) == len(n2):
+                        froll = np.array([])
+                        for i in range(len(n2)): 
+                            if n2[i] <= 75 and n2[i] >= -75:
+                                wout = n1[i]/gr
+                                v = wout * d1['wheel_assembly']['wheel']['radius']
+                                theta = n2[i]*pi/180
+                                fn = mg*cos(theta)
+                                fsimple = fn*crr
+                                frr = special.erf(40*v)*fsimple
+                                froll = np.append(froll, frr)
+                                
+                           
+                            else:
+                                raise Exception("The terrain angle must be between -75 and 75 degrees.")
+                
+                    else:
+                        raise Exception('Omega and terrain angle arrays must be the same length')
+                    return froll      
+                elif n2 <= 75 and n2 >= -75:
+                    wout = n1/gr
+                    v = wout * d1['wheel_assembly']['wheel']['radius']
+                    theta = n2*pi/180
+                    fn = mg*cos(theta)
+                    fsimple = fn*crr
+                    frr = special.erf(40*v)*fsimple
+                    
+                    return(frr)
+                    
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+            
+            else:
+                raise Exception('The rolling resistance coefficient must be a positive scalar')
+        else:
+            raise Exception('Rover and planet inputs must be in form of a dictionary')
+    else:
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')      
+def F_net(n1, n2, d1, d2, n3):
+
+    fd = F_drive(n1, d1)
+
+    fgt = F_gravity(n2, d1, d2)
+
+    frr = F_rolling(n1, n2, d1, d2, n3)
+
+    if type(n1) and type(n2) == np.ndarray or type(n1) and type(n2) == int or type(n1) and type(n2) == float:
+        if type(d1) and type(d2) == dict:
+            if type(n3) == int or float and n3 > 0:
+                if type(n1) and type(n2) == np.ndarray:
+                    if len(n1) == len(n2):
+                        fnet = np.array([])
+                        for i in range(len(n2)): 
+                            if n2[i] <= 75 and n2[i] >= -75:
+                                
+                                fres = fd[i] + fgt[i] - frr[i]
+                                fnet = np.append(fnet, fres)
+                              
+                            else:
+                                raise Exception("The terrain angle must be between -75 and 75 degrees.")
+                        return fnet
+                    else:
+                        raise Exception('Omega and terrain angle arrays must be the same length')
+                       
+                elif n2 <= 75 and n2 >= -75:
+                    fres = fd + fgt - frr
+
+                    return fres
+                
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+            
+            else:
+                raise Exception('The rolling resistance coefficient must be a positive scalar')
+        else:
+            raise Exception('Rover and planet inputs must be in form of a dictionary')
+    else:
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors') 
+
+v_max = []
+for i in Crr_array:
+    fun = lambda x: F_net(x, terrain_angle, rover, planet, float(i))
+    sol = bisection(fun, lb, ub, 1e-5, 1000)
+    print(sol)
+    if type(sol) == float:
+        sol = (sol/get_gear_ratio(speed_reducer)) * wheel['radius']
+    if type(sol) == None:
+        sol = float('nan')
+    v_max.append(sol)
+plt.plot(Crr_array, v_max)
+plt.title("Coefficient of Rolling Resistance vs. Rover Speed")
+plt.xlabel("Coefficient of Rolling Resistance (unitless)")
+plt.ylabel("Rover Speed (m/s)")
+plt.show()
