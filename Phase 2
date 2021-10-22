@@ -4,24 +4,32 @@
 #Cory Chapman
 
 
-
+#experiment_visualization.py
 
 
 
 import numpy as np
+from subfunctions import *
 from scipy.interpolate import interp1d
-from define_experiment import experiment1
 import matplotlib.pyplot as plt
 
-experiment = experiment1()
-#print(experiment)
-x2 = experiment['alpha_dist']
-print(x2)
+distance_list_len = len(experiment['alpha_dist'])
+distance_list = np.linspace(0,max(experiment['alpha_dist']),101)
 
 
-#alpha_fun = interp1d(experiment['alpha_dist'],experiment['alpha_deg'], kind = 'cubic', fill_value='extrapolate')
-#xnew = np.arange(0,1000,10)
-#ynew = alpha_fun(xnew)
-#
-#
-#plt.plot(experiment['alpha_dist'],experiment['alpha_deg'], 'o', xnew, ynew, '-')
+
+alpha_fun = interp1d(experiment['alpha_dist'],experiment['alpha_deg'], kind = 'cubic', fill_value='extrapolate')
+
+angle_list = []
+
+for i in distance_list:
+    angle_list.append(alpha_fun(i))
+    
+    
+
+    
+plt.ylabel('terrain angle (degrees)')
+plt.xlabel('position (meters)')
+plt.title('terrain angle vs. position')
+plt.scatter(experiment['alpha_dist'], experiment['alpha_deg'],marker='*')
+plt.plot(distance_list, angle_list)
