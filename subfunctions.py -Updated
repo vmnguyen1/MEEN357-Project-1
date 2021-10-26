@@ -228,6 +228,21 @@ def mechpower(v, rover):
         raise Exception("v must be scalar or vector")
     return P    
     
+def battenergy(t,v,rover):
+    if type(v) == np.ndarray:
+        if type(t) == np.ndarray:
+            if len(v) == len(t):
+                P = mechpower(v, rover)
+                tau = tau_dcmotor(omega, motor)
+                
+            else:
+                raise Exception("vectors t and v are not equal in length")
+        else:
+            raise Exception("t is not a 1D numpy array")
+    else:
+        raise Exception("v is not a 1D numpy array")
+    return E
+    
     
 omega = 1
 terrain_angle_deg = np.linspace(-10,35,10)
