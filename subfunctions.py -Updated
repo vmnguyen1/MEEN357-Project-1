@@ -66,15 +66,14 @@ def get_gear_ratio(speed_reducer):
 
 
 def tau_dcmotor(omega, motor):
-    if type(omega) != np.ndarray:
-        raise Exception("omega is not a scalar or vector")
-    if type(motor) != dict:
-        raise Exception("motor is not a dictionary")
+    if type(omega) == np.ndarray or type(omega) == float or type(omega) == int:
+        if type(motor) == dict:
+            tau = (motor['torque_stall'] - ((motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload'])*omega)
+        else: 
+            raise Exception("motor is not a dictionary")
     else:
-        tau = []
-        for i in omega:
-            tau.append(motor['torque_stall'] - ((motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload'])*i)
-        return tau
+        raise Exception("omega is not a scalar or vector")
+    return tau
 
 
 def F_drive(omega, rover):
@@ -214,9 +213,22 @@ def rover_dynamics(t, y, rover, planet, experiment):
     else: 
         raise Exception("t must be a scalar")
         
+        
+def mechpower(v, rover):
+    if type(v) == np.ndarray or type(v) == int or type(v) == float:
+        if type(rover) == dict:
+            tau = tau_dcmotor(omega, motor)
+            w_out = motorW(v, rover)
+            P = tau * w_out
+        else:
+            raise Exception("rover must be a dictionary")
+        
+    else: 
+        raise Exception("v must be scalar or vector")
+    return P    
     
     
-omega = np.linspace(1,3.8,10)
+omega = 1
 terrain_angle_deg = np.linspace(-10,35,10)
 terrain_angle =  np.linspace(-10,35,10) * (math.pi)/180
 
@@ -226,10 +238,15 @@ Crr = abs(Crr)
 m = get_mass(rover)
 Ng = get_gear_ratio(speed_reducer)
 tau = tau_dcmotor(omega, motor)
-Fd = F_drive(omega, rover)
-Fgt = F_gravity(terrain_angle, rover, planet)
-F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr) 
-F = F_net(omega, terrain_angle, rover, planet, Crr)
+#Fd = F_drive(omega, rover)
+#Fgt = F_gravity(terrain_angle, rover, planet)
+#F_rr = F_rolling(omega, terrain_angle, rover, planet, Crr) 
+#F = F_net(omega, terrain_angle, rover, planet, Crr)
 
-w = motorW(v, rover)
-print(w, 'rad/s')
+w_out = motorW(v, rover)
+print(w_out, 'rad/s')
+
+P = mechpower(v, rover)
+print(P, 'Watts')
+
+
