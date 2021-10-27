@@ -14,10 +14,16 @@ effcy_list = []
 
 for i in tau_list:
     effcy_list.append(effcy_fun(i))
+    
+effcy_list_percent = []
+for i in effcy_list:
+    effcy_list_percent.append(i*100)
+    
+    
 
-plt.ylabel('Efficiency')
-plt.xlabel('Torque')
+plt.ylabel('Efficiency (%)')
+plt.xlabel('Torque (Nm)')
 plt.title('Efficiency vs. Torque')
-plt.scatter(rover['wheel_assembly']['motor']['effcy_tau'], rover['wheel_assembly']['motor']['effcy'], marker='*')
-plt.plot(tau_list, effcy_list)
+plt.scatter(rover['wheel_assembly']['motor']['effcy_tau'], rover['wheel_assembly']['motor']['effcy']*100, marker='*')
+plt.plot(tau_list, effcy_list_percent)
 plt.show()
