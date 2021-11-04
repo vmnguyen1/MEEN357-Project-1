@@ -303,6 +303,22 @@ def simulate_rover(rover, planet, experiment, end_event):
                     for i in np.nditer(y0):
                         sum1 += i
                     avg = sum1 / len(y0)
+                    pos = avg *T[-1]
+                    distance = y1[-1]
+
+                    bpd = E / distance
+                    telemetry = {}
+                    telemetry['Time'] = t
+                    telemetry['completion time']= T
+                    telemetry['velocty'] = t*y1
+                    telemetry['position']= pos
+                    telemetry['distance_traveled']=
+                    telemetry['max_velocity']= max(vel)
+                    telemetry['average_velocity'] = avg
+                    telemetry['power']= Power
+                    telemetry['bettery_energy']= E
+                    telemetry['energy_per_distant']= E/pos
+                    rover['telemetry'] = telemetry
 
                 else:
                     raise Exception("end_event must be a dictionary")
