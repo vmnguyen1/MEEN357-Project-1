@@ -286,13 +286,24 @@ def simulate_rover(rover, planet, experiment, end_event):
         if type(planet) == dict:
             if type(experiment) == dict:
                 if type(end_event) == dict:
-                    distance_list = np.linspace(0, max(experiment['alpha_dist']), 101)
-                    alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
-                                         fill_value='extrapolate')
-                    angle_list = []
-                    for i in distance_list:
-                        angle_list.append(alpha_fun(i))
-                    sol = solve_ivp(alpha_fun, un)
+                    events = end_of_mission_event(end_event)
+                    y = experiment['initial_conditions']
+                    t = experiment['time_range']
+
+                    fun = lambda t, y: rover_dynamics(t, y, rover, planet, experiment)
+                    from scipy import integrate
+                    sol = integrate.solve_ivp(fun, t, y, method='RK45')
+                    T = sol.t
+                    y0 = sol.y[0, :]
+                    y1 = sol.y[1, :0]
+                    Power = mechpower(y0, rover)
+                    E = battenergy(T, y0, rover)
+                    sum1 = 0
+
+                    for i in np.nditer(y0):
+                        sum1 += i
+                    avg = sum1 / len(y0)
+
                 else:
                     raise Exception("end_event must be a dictionary")
             else:
@@ -302,6 +313,7 @@ def simulate_rover(rover, planet, experiment, end_event):
     else:
         raise Exception("rover must be a dictionary")
     return rover
+
 
 
 m = get_mass(rover)
