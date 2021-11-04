@@ -71,84 +71,78 @@ def F_drive(w_out, rover):
         raise Exception("omega is not a scalar or vector")
     return Fd
     
-def F_gravity(terrain_angle,rover,planet):
+def F_gravity(terrain_angle, rover, planet):
     m = get_mass(rover)
     if type(terrain_angle) == np.ndarray or type(terrain_angle) == int or type(terrain_angle) == float:
         if type(rover) and type(planet) == dict:
             if type(terrain_angle) == np.ndarray:
                 fgt = np.array([])
-                for i in range(len(terrain_angle)): 
+                for i in range(len(terrain_angle)):
                     if terrain_angle[i] <= 75 and terrain_angle[i] >= -75:
-                        theta = terrain_angle[i]*math.pi/180
-                        f = -m*planet['g']*math.sin(theta)
+                        theta = terrain_angle[i] * math.pi / 180
+                        f = -m * planet['g'] * math.sin(theta)
                         fgt = np.append(fgt, f)
-                        
                     else:
                         raise Exception("The terrain angles must be between -75 and 75 degrees.")
                 return fgt
-            
-            elif type(terrain_angle) == int or type(terrain_angle) == float: 
+            elif type(terrain_angle) == int or type(terrain_angle) == float:
                 if terrain_angle <= 75 and terrain_angle >= -75:
-                    theta = terrain_angle*math.pi/180
-                    fgt = -m*planet['g']*math.sin(theta)
+                    theta = terrain_angle * math.pi / 180
+                    fgt = -m * planet['g'] * math.sin(theta)
                     return fgt
-                else: 
+                else:
                     raise Exception("The terrain angle must be between -75 and 75 degrees.")
         else:
             raise Exception('Motor and planet input must be in form of dictionary.')
-    else: 
-        raise Exception('The terrain angle must be a scalar or a vector.')  
-    
+    else:
+        raise Exception('The terrain angle must be a scalar or a vector.')
 
 
 def F_rolling(w_out, terrain_angle, rover, planet, Crr):
     m = get_mass(rover)
     Ng = get_gear_ratio(speed_reducer)
-    
-    if type(w_out) and type(terrain_angle) == np.ndarray or type(w_out) and type(terrain_angle) == int or type(w_out) and type(terrain_angle) == float:
+
+    if type(w_out) and type(terrain_angle) == np.ndarray or type(w_out) and type(terrain_angle) == int or type(
+            w_out) and type(terrain_angle) == float:
         if type(rover) and type(planet) == dict:
             if type(Crr) == int or float and Crr > 0:
-                if type(w_out) and type(terrain_angle) == np.ndarray:
+                if type(w_out) == np.ndarray and type(terrain_angle) == np.ndarray:
                     if len(w_out) == len(terrain_angle):
                         froll = []
-                        for i in terrain_angle: 
+                        for i in terrain_angle:
                             if i <= 75 and i >= -75:
                                 v = w_out * rover['wheel_assembly']['wheel']['radius']
-                                theta = i*math.pi/180
-                                fn = m*planet['g']*math.cos(theta)
-                                fsimple = fn*Crr
-                                frr = special.erf(40*v)*fsimple
-                                frr = -1*frr
+                                theta = i * math.pi / 180
+                                fn = m * planet['g'] * math.cos(theta)
+                                fsimple = fn * Crr
+                                frr = special.erf(40 * v) * fsimple
+                                frr = -1 * frr
                                 froll.append(frr)
-                                
-                           
                             else:
                                 raise Exception("The terrain angle must be between -75 and 75 degrees.")
-                
                     else:
                         raise Exception('Omega and terrain angle arrays must be the same length')
-                    return froll      
-                elif terrain_angle <= 75 and terrain_angle >= -75:
-                    wout = w_out/Ng
-                    v = wout * rover['wheel_assembly']['wheel']['radius']
-                    theta = terrain_angle*math.pi/180
-                    fn = m*planet['g']*math.cos(theta)
-                    fsimple = fn*Crr
-                    frr = special.erf(40*v)*fsimple
-                    frr= -1*frr
-                    
-                    return(frr)
-                    
+                    return froll
+                elif type(terrain_angle) == int or float:
+                    if terrain_angle <= 75 or terrain_angle >= -75:
+                        wout = w_out / Ng
+                        v = wout * rover['wheel_assembly']['wheel']['radius']
+                        theta = terrain_angle * math.pi / 180
+                        fn = m * planet['g'] * math.cos(theta)
+                        fsimple = fn * Crr
+                        frr = special.erf(40 * v) * fsimple
+                        frr = -1 * frr
+                        return (frr)
                 else:
                     raise Exception("The terrain angle must be between -75 and 75 degrees.")
-            
+
             else:
                 raise Exception('The rolling resistance coefficient must be a positive scalar')
         else:
             raise Exception('Rover and planet inputs must be in form of a dictionary')
     else:
-        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')   
-
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
+    #
 def F_net(omega, terrain_angle, rover, planet, Crr):
     Fd = F_drive(omega, rover)
     Fgt = F_gravity(terrain_angle, rover, planet)
@@ -197,40 +191,49 @@ def motorW(v, rover):
         raise Exception("v must be scalar or vector")
     return w_out
 
-
-
-alpha_fun = interp1d(experiment['alpha_dist'],experiment['alpha_deg'], kind = 'cubic', fill_value='extrapolate')
-omega = 3
-terrain_angle = 10
-
-Crr = -0.2
-Crr = abs(Crr)
-
 def rover_dynamics(t, y, rover, planet, experiment):
     if type(t) == int or type(t) == float:
         if type(y) == np.ndarray:
-            if len(y) == 2:
-                if type(rover) == dict:
-                    if type(planet) == dict:
-                        if type(experiment) == dict:
-                            m = get_mass(rover)
-                            terrain_angle = alpha_fun(y[1])
-                            F = F_net(omega, terrain_angle, rover, planet, Crr)
-                        
+            if type(rover) == dict:
+                if type(planet) == dict:
+                    if type(experiment) == dict:
+                        x = experiment['alpha_dist']
+                        i = x[-1] - x[0]
+                        distnew = []
+                        points = i / 100
+                        c = 0
+                        while c <= i:
+                            distnew.append(c)
+                            c += points
+                        v = float(y[0])
+                        alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
+                                             fill_value='extrapolate')
+                        terrain_angle = float(alpha_fun(y[1]))
+                        o = motorW(v, rover)
 
-                        else:
-                            raise Exception("experiment must be a dictionary")
+                        accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover)
+
+                        dydt = np.array([0.0, 0.0])
+
+                        dydt[0] = round(accel, 4)
+                        dydt[1] = y[0]
+
+                        return dydt
+
                     else:
-                        raise Exception("planet must be a dictionary")
+                        raise Exception("experiment must be a dictionary")
                 else:
-                    raise Exception("rover must be a dictionary")
+                    raise Exception("planet must be a dictionary")
             else:
-                raise Exception("y must be a 2 element array")
+                raise Exception("rover must be a dictionary")
         else:
             raise Exception("y must be a 1D numpy array")
-    else: 
+    else:
         raise Exception("t must be a scalar")
-        
+
+t = 0
+y = np.array([0.33, 0])
+print(rover_dynamics(t, y, rover, planet, experiment))        
         
 def mechpower(v, rover):
     if type(v) == np.ndarray or type(v) == int or type(v) == float:
