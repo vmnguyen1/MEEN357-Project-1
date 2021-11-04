@@ -148,30 +148,40 @@ def F_rolling(w_out, terrain_angle, rover, planet, Crr):
             raise Exception('Rover and planet inputs must be in form of a dictionary')
     else:
         raise Exception('Values for Omega and terrain angle must be either scalars or vectors')   
-#
-#def F_net(omega, terrain_angle, rover, planet, Crr):
-#    Fd = F_drive(omega, rover)
-#    Fgt = F_gravity(terrain_angle, rover, planet)
-#    Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
-#    if type(omega) != np.ndarray:
-#        raise Exception("omega is not a scalar or vector")
-#    if type(terrain_angle) != np.ndarray:
-#        raise Exception("terrain_angle is not a scalar or vector")
-#    for i in terrain_angle:
-#        if i < -75 :
-#            raise Exception("terrain angle is less than -75 degrees")
-#        if i > 75 :
-#            raise Exception("terrain angle is more than -75 degrees")
-#    if type(rover) != dict:
-#        raise Exception("rover is not a dictionary")
-#    if type(planet) !=dict:
-#        raise Exception("planet is not a dictionary")
-#    else:
-#        F = []
-#        for i in range(len(Fd)):
-#            x = Fd[i] + Frr[i] + Fgt[i]
-#            F.append(x)
-#        return F
+
+def F_net(omega, terrain_angle, rover, planet, Crr):
+    Fd = F_drive(omega, rover)
+    Fgt = F_gravity(terrain_angle, rover, planet)
+    Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+    if type(omega) and type(terrain_angle) == np.ndarray or type(omega) and type(terrain_angle) == int or type(
+            omega) and type(terrain_angle) == float:
+        if type(rover) and type(planet) == dict:
+            if type(Crr) == int or float and Crr > 0:
+                if type(omega) and type(terrain_angle) == np.ndarray:
+                    if len(omega) == len(terrain_angle):
+                        F = []
+                        for i in terrain_angle:
+                            if i <= 75 and i >= -75:
+                                for i in range(len(Fd)):
+                                    x = Fd[i] + Frr[i] + Fgt[i]
+                                    F.append(x)
+                            else:
+                                raise Exception("The terrain angle must be between -75 and 75 degrees.")
+                    else:
+                        raise Exception('Omega and terrain angle arrays must be the same length')
+                    return F
+                elif terrain_angle <= 75 and terrain_angle >= -75:
+                    Fnet = Fd + Fgt + Frr
+                    return Fnet
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+
+            else:
+                raise Exception('The rolling resistance coefficient must be a positive scalar')
+        else:
+            raise Exception('Rover and planet inputs must be in form of a dictionary')
+    else:
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
     
 v = .1
 
