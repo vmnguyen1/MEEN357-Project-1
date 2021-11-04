@@ -12,7 +12,7 @@ rover = {'wheel_assembly':{'wheel':{'radius': 0.30 , 'mass': 1.0},
                                       'effcy': np.array([0, 0.60, 0.75, 0.73, 0.55, 0.05])}}, 
          'chassis':{'mass': 659}, 
          'science_payload':{'mass': 75}, 
-         'power_subsys':{'mass': 90}}
+         'power_subsys':{'mass': 90},
          'telemetry': {'time': [], 'completion time': 0, 'velocity': [], 'position': [], 'distance_traveled': 0, 'max_velocity': 0,
                        'average_velocity': 0, 'power': [], 'battery_energy': 0, 'energy_per_distant': 0}}
 wheel_assembly = {'wheel':{'radius': 0.30 , 'mass': 1.0},
