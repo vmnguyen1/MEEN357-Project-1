@@ -1,0 +1,394 @@
+import numpy as np
+import math
+from scipy.interpolate import interp1d
+from scipy import special
+
+rover = {'wheel_assembly': {'wheel': {'radius': 0.30, 'mass': 1.0},
+                            'speed_reducer': {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5},
+                            'motor': {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.0,
+                                      'effcy_tau': np.array([0, 10, 20, 40, 75, 165]),
+                                      'effcy': np.array([0, 0.60, 0.75, 0.73, 0.55, 0.05])}},
+         'chassis': {'mass': 659},
+         'science_payload': {'mass': 75},
+         'power_subsys': {'mass': 90}}
+wheel_assembly = {'wheel': {'radius': 0.30, 'mass': 1.0},
+'speed_reducer': {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5},
+'motor': {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.0}}
+speed_reducer = {'type': 'reverted', 'diam_pinion': 0.04, 'diam_gear': 0.07, 'mass': 1.5}
+motor = {'torque_stall': 170, 'torque_noload': 0, 'speed_noload': 3.80, 'mass': 5.9}
+planet = {'g': 3.72}
+
+experiment = {'time_range': np.array([0, 20000]),
+'initial_conditions': np.array([0.3125, 0]),
+'alpha_dist': np.array([0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]),
+'alpha_deg': np.array([11.509, 2.032, 7.182, 2.478, 5.511, 10.981, 5.601, -0.184, 0.714, 4.151, 4.042]),
+'Crr': 0.1}
+
+end_event = {'max_distance': 50,
+'max_time': 5000,
+'min_velocity': 0.01}
+
+def get_mass(rover):
+    if type(rover) == dict:
+        m = 6 * rover['wheel_assembly']['wheel']['mass'] + 6 * rover['wheel_assembly']['speed_reducer']['mass'] + 6 * \
+            rover['wheel_assembly']['motor']['mass'] + rover['chassis']['mass'] + rover['science_payload']['mass'] + \
+            rover['power_subsys']['mass']
+    else:
+        raise Exception("rover is not a dictionary")
+    return m
+
+
+def get_gear_ratio(speed_reducer):
+    if type(speed_reducer) != dict:
+        raise Exception("rover is not a dictionary")
+    if rover['wheel_assembly']['speed_reducer']['type'] != 'reverted':
+        print('''Error: 'type' field is not "reverted"''')
+    else:
+        Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer'][
+            'diam_pinion']) ** 2
+        return Ng
+
+
+def tau_dcmotor(w_out, motor):
+    if type(w_out) == np.ndarray or type(w_out) == float or type(w_out) == int:
+        if type(motor) == dict:
+            tau = (motor['torque_stall'] - (
+                        (motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload']) * w_out)
+        else:
+            raise Exception("motor is not a dictionary")
+    else:
+        raise Exception("omega is not a scalar or vector")
+    return tau
+
+
+def F_drive(w_out, rover):
+    tau = tau_dcmotor(w_out, motor)
+    if type(w_out) == np.ndarray or type(w_out) == int or type(w_out) == float:
+        if type(rover) == dict:
+            Ng = get_gear_ratio(speed_reducer)
+            Fd = (6 * tau * Ng / rover['wheel_assembly']['wheel']['radius'])
+        else:
+            raise Exception("rover is not a dictionary")
+    else:
+        raise Exception("omega is not a scalar or vector")
+    return Fd
+
+
+def F_gravity(terrain_angle, rover, planet):
+    m = get_mass(rover)
+    if type(terrain_angle) == np.ndarray or type(terrain_angle) == int or type(terrain_angle) == float:
+        if type(rover) and type(planet) == dict:
+            if type(terrain_angle) == np.ndarray:
+                fgt = np.array([])
+                for i in range(len(terrain_angle)):
+                    if terrain_angle[i] <= 75 and terrain_angle[i] >= -75:
+                        theta = terrain_angle[i] * math.pi / 180
+                        f = -m * planet['g'] * math.sin(theta)
+                        fgt = np.append(fgt, f)
+                    else:
+                        raise Exception("The terrain angles must be between -75 and 75 degrees.")
+                return fgt
+            elif type(terrain_angle) == int or type(terrain_angle) == float:
+                if terrain_angle <= 75 and terrain_angle >= -75:
+                    theta = terrain_angle * math.pi / 180
+                    fgt = -m * planet['g'] * math.sin(theta)
+                    return fgt
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+        else:
+            raise Exception('Motor and planet input must be in form of dictionary.')
+    else:
+        raise Exception('The terrain angle must be a scalar or a vector.')
+
+
+def F_rolling(w_out, terrain_angle, rover, planet, Crr):
+    m = get_mass(rover)
+    Ng = get_gear_ratio(speed_reducer)
+
+    if type(w_out) and type(terrain_angle) == np.ndarray or type(w_out) and type(terrain_angle) == int or type(
+            w_out) and type(terrain_angle) == float:
+        if type(rover) and type(planet) == dict:
+            if type(Crr) == int or float and Crr > 0:
+                if type(w_out) == np.ndarray and type(terrain_angle) == np.ndarray:
+                    if len(w_out) == len(terrain_angle):
+                        froll = []
+                        for i in terrain_angle:
+                            if i <= 75 and i >= -75:
+                                v = w_out * rover['wheel_assembly']['wheel']['radius']
+                                theta = i * math.pi / 180
+                                fn = m * planet['g'] * math.cos(theta)
+                                fsimple = fn * Crr
+                                frr = special.erf(40 * v) * fsimple
+                                frr = -1 * frr
+                                froll.append(frr)
+                            else:
+                                raise Exception("The terrain angle must be between -75 and 75 degrees.")
+                    else:
+                        raise Exception('Omega and terrain angle arrays must be the same length')
+                    return froll
+                elif type(terrain_angle) == int or float:
+                    if terrain_angle <= 75 or terrain_angle >= -75:
+                        wout = w_out / Ng
+                        v = wout * rover['wheel_assembly']['wheel']['radius']
+                        theta = terrain_angle * math.pi / 180
+                        fn = m * planet['g'] * math.cos(theta)
+                        fsimple = fn * Crr
+                        frr = special.erf(40 * v) * fsimple
+                        frr = -1 * frr
+                        return (frr)
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+
+            else:
+                raise Exception('The rolling resistance coefficient must be a positive scalar')
+        else:
+            raise Exception('Rover and planet inputs must be in form of a dictionary')
+    else:
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
+    #
+
+
+def F_net(omega, terrain_angle, rover, planet, Crr):
+    Fd = F_drive(omega, rover)
+    Fgt = F_gravity(terrain_angle, rover, planet)
+    Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
+    if type(omega) and type(terrain_angle) == np.ndarray or type(omega) and type(terrain_angle) == int or type(
+            omega) and type(terrain_angle) == float:
+        if type(rover) and type(planet) == dict:
+            if type(Crr) == int or float and Crr > 0:
+                if type(omega) and type(terrain_angle) == np.ndarray:
+                    if len(omega) == len(terrain_angle):
+                        F = []
+                        for i in terrain_angle:
+                            if i <= 75 and i >= -75:
+                                for i in range(len(Fd)):
+                                    x = Fd[i] + Frr[i] + Fgt[i]
+                                    F.append(x)
+                            else:
+                                raise Exception("The terrain angle must be between -75 and 75 degrees.")
+                    else:
+                        raise Exception('Omega and terrain angle arrays must be the same length')
+                    return F
+                elif terrain_angle <= 75 and terrain_angle >= -75:
+                    Fnet = Fd + Fgt + Frr
+                    return Fnet
+                else:
+                    raise Exception("The terrain angle must be between -75 and 75 degrees.")
+
+            else:
+                raise Exception('The rolling resistance coefficient must be a positive scalar')
+        else:
+            raise Exception('Rover and planet inputs must be in form of a dictionary')
+    else:
+        raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
+
+
+v = .1
+
+
+def motorW(v, rover):
+    if type(v) == np.ndarray or type(v) == int or type(v) == float:
+        if type(rover) == dict:
+            w_in = v / wheel_assembly['wheel']['radius']
+            Ng = get_gear_ratio(speed_reducer)
+            w_out = w_in * Ng
+        else:
+            raise Exception("rover must be a dictionary")
+    else:
+        raise Exception("v must be scalar or vector")
+    return w_out
+
+
+def rover_dynamics(t, y, rover, planet, experiment):
+#    if type(t) == int or type(t) == float:
+        if type(y) == np.ndarray:
+            if type(rover) == dict:
+                if type(planet) == dict:
+                    if type(experiment) == dict:
+                        x = experiment['alpha_dist']
+                        i = x[-1] - x[0]
+                        distnew = []
+                        points = i / 100
+                        c = 0
+                        while c <= i:
+                            distnew.append(c)
+                            c += points
+                        v = float(y[0])
+                        alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
+                                             fill_value='extrapolate')
+                        terrain_angle = float(alpha_fun(y[1]))
+                        o = motorW(v, rover)
+
+                        accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover)
+
+                        dydt = np.array([0.0, 0.0])
+
+                        dydt[0] = round(accel, 4)
+                        dydt[1] = y[0]
+
+                        return dydt
+
+                    else:
+                        raise Exception("experiment must be a dictionary")
+                else:
+                    raise Exception("planet must be a dictionary")
+            else:
+                raise Exception("rover must be a dictionary")
+        else:
+            raise Exception("y must be a 1D numpy array")
+#    else:
+#        raise Exception("t must be a scalar")
+
+
+# t = 0
+# y = np.array([0.33, 0])
+# print(rover_dynamics(t, y, rover, planet, experiment))
+
+
+def mechpower(v, rover):
+    if type(v) == np.ndarray or type(v) == int or type(v) == float:
+        if type(rover) == dict:
+            w_out = motorW(v, rover)
+            tau = tau_dcmotor(w_out, motor)
+            P = tau * w_out
+        else:
+            raise Exception("rover must be a dictionary")
+    else:
+        raise Exception("v must be scalar or vector")
+    return P
+
+
+def battenergy(t, v, rover):
+    import scipy
+    from scipy.integrate import trapz
+    if type(v) == np.ndarray:
+        if type(t) == np.ndarray:
+            if len(v) == len(t):
+                if type(rover) == dict:
+                    P = mechpower(v, rover)
+                    effcy_fun = interp1d(rover['wheel_assembly']['motor']['effcy_tau'],
+                                             rover['wheel_assembly']['motor']['effcy'])
+
+                    p_list=np.ndarray([0])
+                    for i in range(len(t)):
+                        omega = motorW(float(v[i]), rover)
+                        tau = tau_dcmotor(omega, motor)
+                        effcy = effcy_fun(tau)
+                        p_batt = (P[i]/effcy)
+                        p_list = np.append(p_list, p_batt)
+                    energy = scipy.integrate.trapz(p_list, t)
+                else:
+                    raise Exception("rover is not a dictionary")
+            else:
+                raise Exception("vectors t and v are not equal in length")
+        else:
+            raise Exception("t is not a 1D numpy array")
+    else:
+        raise Exception("v is not a 1D numpy array")
+    return energy * 6
+
+
+def end_of_mission_event(end_event):
+    """
+    Defines an event that terminates the mission simulation. Mission is over
+    when rover reaches a certain distance, has moved for a maximum simulation
+    time or has reached a minimum velocity.
+    """
+
+    mission_distance = end_event['max_distance']
+    mission_max_time = end_event['max_time']
+    mission_min_velocity = end_event['min_velocity']
+
+    # Assume that y[1] is the distance traveled
+    distance_left = lambda t, y: mission_distance - y[1]
+    distance_left.terminal = True
+
+    time_left = lambda t, y: mission_max_time - t
+    time_left.terminal = True
+
+    velocity_threshold = lambda t, y: y[0] - mission_min_velocity;
+    velocity_threshold.terminal = True
+    velocity_threshold.direction = -1
+
+    # terminal indicates whether any of the conditions can lead to the
+    # termination of the ODE solver. In this case all conditions can terminate
+    # the simulation independently.
+
+    # direction indicates whether the direction along which the different
+    # conditions is reached matter or does not matter. In this case, only
+    # the direction in which the velocity treshold is arrived at matters
+    # (negative)
+
+    events = [distance_left, time_left, velocity_threshold]
+
+    return events
+
+def simulate_rover(rover, planet, experiment, end_event):
+    from statistics import mean
+    if type(rover) == dict:
+        if type(planet) == dict:
+            if type(experiment) == dict:
+                if type(end_event) == dict:
+                    events = end_of_mission_event(end_event)
+                    y = experiment['initial_conditions']
+                    t = experiment['time_range']
+
+                    fun = lambda t, y: rover_dynamics(t, y, rover, planet, experiment)
+                    from scipy import integrate
+                    sol = integrate.solve_ivp(fun, t, y, method='RK45', events=events)
+                    T = sol.t
+                    y0 = sol.y[0, :]
+                    y1 = sol.y[1, :]
+                    Power = mechpower(y0, rover)
+                    E = battenergy(T, y0, rover)
+                    total_dist = mean(y0)*T[-1]
+
+                    telemetry = {}
+                    telemetry['Time'] = T
+                    telemetry['completion time']= T[-1]
+                    telemetry['velocty'] = y0
+                    telemetry['position']= y1
+                    telemetry['distance_traveled']= total_dist
+                    telemetry['max_velocity']= max(y0)
+                    telemetry['average_velocity'] = mean(y0)
+                    telemetry['power']= Power
+                    telemetry['bettery_energy']= E
+                    telemetry['energy_per_distant']= E/total_dist
+                    rover['telemetry'] = telemetry
+                else:
+                    raise Exception("end_event must be a dictionary")
+            else:
+                raise Exception("experiment must be a dictionary")
+        else:
+            raise Exception("planet must be a dictionary")
+    else:
+        raise Exception("rover must be a dictionary")
+    return rover
+
+rover = simulate_rover(rover, planet, experiment, end_event)
+
+print(rover['telemetry'])
+v = np.array([.33, .32, .33, .2, .2, .25, .28])
+t = np.array([0, 1, 2, 3, 4, 5, 6])
+energy = battenergy(t, v, rover)
+print('Energy is', energy)
+
+m = get_mass(rover)
+Ng = get_gear_ratio(speed_reducer)
+
+
+
+w_out = motorW(np.array([.1, .3]), rover)
+print('w_out is', w_out, 'rad/s')
+
+
+P = mechpower(np.array([.05, .25]), rover)
+print("\nP is", P, 'Watts')
+
+
+
+E = battenergy(np.array([0, 1, 2, 3, 4, 5, 6]), np.array([.33, .32, .33, .2, .2, .25, .28]), rover)
+print("\nE is", E, "Joules")
+
+
+
