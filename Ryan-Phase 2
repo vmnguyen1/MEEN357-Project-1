@@ -29,6 +29,11 @@ end_event = {'max_distance': 50,
 'min_velocity': 0.01}
 
 def get_mass(rover):
+    '''
+    :param rover:
+    :return mass:
+    This function takes the dictionaries of rover and finds the mass based on how many wheels and chassis bodies are in the system
+    '''
     if type(rover) == dict:
         m = 6 * rover['wheel_assembly']['wheel']['mass'] + 6 * rover['wheel_assembly']['speed_reducer']['mass'] + 6 * \
             rover['wheel_assembly']['motor']['mass'] + rover['chassis']['mass'] + rover['science_payload']['mass'] + \
@@ -37,8 +42,14 @@ def get_mass(rover):
         raise Exception("rover is not a dictionary")
     return m
 
+help(get_mass)
 
 def get_gear_ratio(speed_reducer):
+    '''
+    :param speed_reducer:
+    :return Ng:
+    This function inputs speed_reducer from the wheel assembly dictionary and outputs the gear ratio with the equation gear diameter/gear pinion^2
+    '''
     if type(speed_reducer) != dict:
         raise Exception("rover is not a dictionary")
     if rover['wheel_assembly']['speed_reducer']['type'] != 'reverted':
@@ -48,8 +59,15 @@ def get_gear_ratio(speed_reducer):
             'diam_pinion']) ** 2
         return Ng
 
+help(get_gear_ratio)
 
 def tau_dcmotor(w_out, motor):
+    '''
+    :param w_out:
+    :param motor:
+    :return tau:
+    This function models the DC motor behavior as a torque-speed curve by finding the motor shaft torque. This is calculated by (torque stall - (stall - noload)/noload) * w_out
+    '''
     if type(w_out) == np.ndarray or type(w_out) == float or type(w_out) == int:
         if type(motor) == dict:
             tau = (motor['torque_stall'] - (
@@ -60,8 +78,14 @@ def tau_dcmotor(w_out, motor):
         raise Exception("omega is not a scalar or vector")
     return tau
 
-
+help(tau_dcmotor)
 def F_drive(w_out, rover):
+    '''
+    :param w_out:
+    :param rover:
+    :return F drive:
+    This function calculates the force on the rover using the drive system due to all 6 wheels. Fd = 6 * tau * Ng/radius
+    '''
     tau = tau_dcmotor(w_out, motor)
     if type(w_out) == np.ndarray or type(w_out) == int or type(w_out) == float:
         if type(rover) == dict:
@@ -73,8 +97,16 @@ def F_drive(w_out, rover):
         raise Exception("omega is not a scalar or vector")
     return Fd
 
+help(F_drive)
 
 def F_gravity(terrain_angle, rover, planet):
+    '''
+    :param terrain_angle:
+    :param rover:
+    :param planet:
+    :return F gravity:
+    This function finds the force on the rover by gravity. This takes into account the mass of the rover * the gravitational constant of the planet * the sin of the terrain angle
+    '''
     m = get_mass(rover)
     if type(terrain_angle) == np.ndarray or type(terrain_angle) == int or type(terrain_angle) == float:
         if type(rover) and type(planet) == dict:
@@ -102,6 +134,15 @@ def F_gravity(terrain_angle, rover, planet):
 
 
 def F_rolling(w_out, terrain_angle, rover, planet, Crr):
+    '''
+    :param w_out:
+    :param terrain_angle:
+    :param rover:
+    :param planet:
+    :param Crr:
+    :return F rolling:
+    This function models the force on the rover due to rolling resistance which is the retarding force from the friction between the wheels and the ground.
+    '''
     m = get_mass(rover)
     Ng = get_gear_ratio(speed_reducer)
 
@@ -148,6 +189,15 @@ def F_rolling(w_out, terrain_angle, rover, planet, Crr):
 
 
 def F_net(omega, terrain_angle, rover, planet, Crr):
+    '''
+    :param omega:
+    :param terrain_angle:
+    :param rover:
+    :param planet:
+    :param Crr:
+    :return F Net:
+    This function calculates the net force on the rover based on the forces from driving, the gravitational forces, and the rolling resistance force
+    '''
     Fd = F_drive(omega, rover)
     Fgt = F_gravity(terrain_angle, rover, planet)
     Frr = F_rolling(omega, terrain_angle, rover, planet, Crr)
@@ -184,6 +234,12 @@ def F_net(omega, terrain_angle, rover, planet, Crr):
 
 
 def motorW(v, rover):
+    '''
+    :param v:
+    :param rover:
+    :return omega:
+    This function calculates the rotational speed of the motor shaft [rad/s] given the translational velocity of the rover with the gear ratio
+    '''
     if type(v) == np.ndarray or type(v) == int or type(v) == float:
         if type(rover) == dict:
             w_in = v / wheel_assembly['wheel']['radius']
@@ -197,44 +253,63 @@ def motorW(v, rover):
 
 
 def rover_dynamics(t, y, rover, planet, experiment):
-        if type(y) == np.ndarray:
-            if type(rover) == dict:
-                if type(planet) == dict:
-                    if type(experiment) == dict:
-                        x = experiment['alpha_dist']
-                        i = x[-1] - x[0]
-                        distnew = []
-                        points = i / 100
-                        c = 0
-                        while c <= i:
-                            distnew.append(c)
-                            c += points
-                        v = float(y[0])
-                        alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
-                                             fill_value='extrapolate')
-                        terrain_angle = float(alpha_fun(y[1]))
-                        o = motorW(v, rover)
+    '''
+    :param t:
+    :param y:
+    :param rover:
+    :param planet:
+    :param experiment:
+    :return dy dt:
+    This function computes the derivative of the state vector for the rover using the experiment data.
+    This is calculated by taking interpolating the terrain angle and using that with the acceleration of the rover to find the state vector derivative
+    '''
+    if type(y) == np.ndarray:
+        if type(rover) == dict:
+            if type(planet) == dict:
+                if type(experiment) == dict:
+                    x = experiment['alpha_dist']
+                    i = x[-1] - x[0]
+                    distnew = []
+                    points = i / 100
+                    c = 0
+                    while c <= i:
+                        distnew.append(c)
+                        c += points
+                    v = float(y[0])
+                    alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
+                                         fill_value='extrapolate')
+                    terrain_angle = float(alpha_fun(y[1]))
+                    o = motorW(v, rover)
 
-                        accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover)
+                    accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover)
 
-                        dydt = np.array([0.0, 0.0])
+                    dydt = np.array([0.0, 0.0])
 
-                        dydt[0] = round(accel, 4)
-                        dydt[1] = y[0]
+                    dydt[0] = round(accel, 4)
+                    dydt[1] = y[0]
 
-                        return dydt
+                    return dydt
 
-                    else:
-                        raise Exception("experiment must be a dictionary")
                 else:
-                    raise Exception("planet must be a dictionary")
+                    raise Exception("experiment must be a dictionary")
             else:
-                raise Exception("rover must be a dictionary")
+                raise Exception("planet must be a dictionary")
         else:
-            raise Exception("y must be a 1D numpy array")
+            raise Exception("rover must be a dictionary")
+    else:
+        raise Exception("y must be a 1D numpy array")
 
+t = 0
+y = np.array([0.33, 0])
+print(rover_dynamics(t, y, rover, planet, experiment))
 
 def mechpower(v, rover):
+    '''
+    :param v:
+    :param rover:
+    :return power:
+    This function calculates the instantaneous mechanical power output by a single DC motor given the velocity profile.
+    '''
     if type(v) == np.ndarray or type(v) == int or type(v) == float:
         if type(rover) == dict:
             w_out = motorW(v, rover)
@@ -248,6 +323,13 @@ def mechpower(v, rover):
 
 
 def battenergy(t, v, rover):
+    '''
+    :param t:
+    :param v:
+    :param rover:
+    :return Battery Energy:
+    This function calculates the energy consumed by the battery defined as time-velocity pairs assuming that all the motors run off of the same battery
+    '''
     import scipy
     from scipy.integrate import trapz
     if type(v) == np.ndarray:
@@ -314,7 +396,12 @@ def end_of_mission_event(end_event):
 
 def simulate_rover(rover, planet, experiment, end_event):
     '''
-    inputs: 
+    :param rover: 
+    :param planet: 
+    :param experiment: 
+    :param end_event: 
+    :return rover[telemetry]: 
+    This function integrates the trajectory of the rover using the experiment conditions and solving the IVP of the terrain, and it fills in the telemetry dictionary within rover
     '''
     from statistics import mean
     if type(rover) == dict:
