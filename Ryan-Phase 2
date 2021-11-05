@@ -37,7 +37,7 @@ def get_mass(rover):
     if type(rover) == dict:
         m = 6 * rover['wheel_assembly']['wheel']['mass'] + 6 * rover['wheel_assembly']['speed_reducer']['mass'] + 6 * \
             rover['wheel_assembly']['motor']['mass'] + rover['chassis']['mass'] + rover['science_payload']['mass'] + \
-            rover['power_subsys']['mass']
+            rover['power_subsys']['mass'] #calculating mass based on the wheel assembly mass and chassis, science payload, and power subsystem
     else:
         raise Exception("rover is not a dictionary")
     return m
@@ -56,7 +56,7 @@ def get_gear_ratio(speed_reducer):
         print('''Error: 'type' field is not "reverted"''')
     else:
         Ng = (rover['wheel_assembly']['speed_reducer']['diam_gear'] / rover['wheel_assembly']['speed_reducer'][
-            'diam_pinion']) ** 2
+            'diam_pinion']) ** 2 # computing gear ratio using pinion and gear diameters Ng = (d2/d1)^2
         return Ng
 
 help(get_gear_ratio)
@@ -71,7 +71,7 @@ def tau_dcmotor(w_out, motor):
     if type(w_out) == np.ndarray or type(w_out) == float or type(w_out) == int:
         if type(motor) == dict:
             tau = (motor['torque_stall'] - (
-                        (motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload']) * w_out)
+                        (motor['torque_stall'] - motor['torque_noload']) / motor['speed_noload']) * w_out) #calculating torque with (stall - (stall-noload)/noload))* omega
         else:
             raise Exception("motor is not a dictionary")
     else:
@@ -91,6 +91,7 @@ def F_drive(w_out, rover):
         if type(rover) == dict:
             Ng = get_gear_ratio(speed_reducer)
             Fd = (6 * tau * Ng / rover['wheel_assembly']['wheel']['radius'])
+            # calculating Fd = 6 * tau * Ng/radius
         else:
             raise Exception("rover is not a dictionary")
     else:
@@ -114,8 +115,8 @@ def F_gravity(terrain_angle, rover, planet):
                 fgt = np.array([])
                 for i in range(len(terrain_angle)):
                     if terrain_angle[i] <= 75 and terrain_angle[i] >= -75:
-                        theta = terrain_angle[i] * math.pi / 180
-                        f = -m * planet['g'] * math.sin(theta)
+                        theta = terrain_angle[i] * math.pi / 180 # calculating theta with angle *pi/180
+                        f = -m * planet['g'] * math.sin(theta) #calculating gravitational force m*g*sin(theta)
                         fgt = np.append(fgt, f)
                     else:
                         raise Exception("The terrain angles must be between -75 and 75 degrees.")
@@ -155,13 +156,13 @@ def F_rolling(w_out, terrain_angle, rover, planet, Crr):
                         froll = []
                         for i in terrain_angle:
                             if i <= 75 and i >= -75:
-                                v = w_out * rover['wheel_assembly']['wheel']['radius']
+                                v = w_out * rover['wheel_assembly']['wheel']['radius'] # calculating velocity = omega * radius
                                 theta = i * math.pi / 180
-                                fn = m * planet['g'] * math.cos(theta)
+                                fn = m * planet['g'] * math.cos(theta) # calculating force normal = m * g * cos(theta)
                                 fsimple = fn * Crr
                                 frr = special.erf(40 * v) * fsimple
                                 frr = -1 * frr
-                                froll.append(frr)
+                                froll.append(frr) # adding frr to the array of the rolling resistance force
                             else:
                                 raise Exception("The terrain angle must be between -75 and 75 degrees.")
                     else:
@@ -211,7 +212,7 @@ def F_net(omega, terrain_angle, rover, planet, Crr):
                         for i in terrain_angle:
                             if i <= 75 and i >= -75:
                                 for i in range(len(Fd)):
-                                    x = Fd[i] + Frr[i] + Fgt[i]
+                                    x = Fd[i] + Frr[i] + Fgt[i] # adding to the array of the force net by adding all of the forces at a specific angle
                                     F.append(x)
                             else:
                                 raise Exception("The terrain angle must be between -75 and 75 degrees.")
@@ -242,9 +243,9 @@ def motorW(v, rover):
     '''
     if type(v) == np.ndarray or type(v) == int or type(v) == float:
         if type(rover) == dict:
-            w_in = v / wheel_assembly['wheel']['radius']
+            w_in = v / wheel_assembly['wheel']['radius'] #calculating omega with translational velocity / radius
             Ng = get_gear_ratio(speed_reducer)
-            w_out = w_in * Ng
+            w_out = w_in * Ng #calculating omega in the motor out based off of the gear ratio * velocity of wheel
         else:
             raise Exception("rover must be a dictionary")
     else:
@@ -277,15 +278,15 @@ def rover_dynamics(t, y, rover, planet, experiment):
                         c += points
                     v = float(y[0])
                     alpha_fun = interp1d(experiment['alpha_dist'], experiment['alpha_deg'], kind='cubic',
-                                         fill_value='extrapolate')
-                    terrain_angle = float(alpha_fun(y[1]))
+                                         fill_value='extrapolate') # interpolating angle distance with scipy.interpolate.interpld function
+                    terrain_angle = float(alpha_fun(y[1])) # terrain angle by floating the angle distance interpolation
                     o = motorW(v, rover)
 
-                    accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover)
+                    accel = F_net(o, terrain_angle, rover, planet, 0.1) / get_mass(rover) # calculating acceleration based on F net / m which is second law of motion
 
                     dydt = np.array([0.0, 0.0])
 
-                    dydt[0] = round(accel, 4)
+                    dydt[0] = round(accel, 4) # finding the state vector derivative with the acceleration in an array
                     dydt[1] = y[0]
 
                     return dydt
@@ -314,7 +315,7 @@ def mechpower(v, rover):
         if type(rover) == dict:
             w_out = motorW(v, rover)
             tau = tau_dcmotor(w_out, motor)
-            P = tau * w_out
+            P = tau * w_out # finding power of a motor with torque times omega
         else:
             raise Exception("rover must be a dictionary")
     else:
@@ -338,16 +339,16 @@ def battenergy(t, v, rover):
                 if type(rover) == dict:
                     P = mechpower(v, rover)
                     effcy_fun = interp1d(rover['wheel_assembly']['motor']['effcy_tau'],
-                                             rover['wheel_assembly']['motor']['effcy'])
+                                             rover['wheel_assembly']['motor']['effcy']) # interpolating the efficiencyy of the motor to create a function
 
                     p_list=np.ndarray([0])
                     for i in range(len(t)):
                         omega = motorW(float(v[i]), rover)
                         tau = tau_dcmotor(omega, motor)
                         effcy = effcy_fun(tau)
-                        p_batt = (P[i]/effcy)
-                        p_list = np.append(p_list, p_batt)
-                    energy = scipy.integrate.trapz(p_list, t)
+                        p_batt = (P[i]/effcy) # calculating the battery power by dividing mech power/ efficiency
+                        p_list = np.append(p_list, p_batt) #adding the power of the battery to the array 
+                    energy = scipy.integrate.trapz(p_list, t) # using the trapezoid method to integrate power over time to find energy
                 else:
                     raise Exception("rover is not a dictionary")
             else:
@@ -356,7 +357,7 @@ def battenergy(t, v, rover):
             raise Exception("t is not a 1D numpy array")
     else:
         raise Exception("v is not a 1D numpy array")
-    return energy * 6
+    return energy * 6 # finding the energy of all 6 motors by multiplying by 6
 
 
 def end_of_mission_event(end_event):
@@ -396,11 +397,11 @@ def end_of_mission_event(end_event):
 
 def simulate_rover(rover, planet, experiment, end_event):
     '''
-    :param rover: 
-    :param planet: 
-    :param experiment: 
-    :param end_event: 
-    :return rover[telemetry]: 
+    :param rover:
+    :param planet:
+    :param experiment:
+    :param end_event:
+    :return rover[telemetry]:
     This function integrates the trajectory of the rover using the experiment conditions and solving the IVP of the terrain, and it fills in the telemetry dictionary within rover
     '''
     from statistics import mean
@@ -412,17 +413,17 @@ def simulate_rover(rover, planet, experiment, end_event):
                     y = experiment['initial_conditions']
                     t = experiment['time_range']
 
-                    fun = lambda t, y: rover_dynamics(t, y, rover, planet, experiment)
+                    fun = lambda t, y: rover_dynamics(t, y, rover, planet, experiment) # creating a function based on lambda t and y with rover dynamics
                     from scipy import integrate
-                    sol = integrate.solve_ivp(fun, t, y, method='RK45', events=events)
+                    sol = integrate.solve_ivp(fun, t, y, method='RK45', events=events) # using the solve IVP function to integrate the function according to runge katta method
                     T = sol.t
                     y0 = sol.y[0, :]
                     y1 = sol.y[1, :]
                     Power = mechpower(y0, rover)
                     E = battenergy(T, y0, rover)
-                    total_dist = mean(y0)*T[-1]
+                    total_dist = mean(y0)*T[-1] # total distance based off of the average distance and time
 
-                    telemetry = {}
+                    telemetry = {} # telemetry dictionary with all the end inputs being added to it
                     telemetry['Time'] = T
                     telemetry['completion time']= T[-1]
                     telemetry['velocty'] = y0
