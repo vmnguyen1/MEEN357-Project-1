@@ -279,6 +279,7 @@ def battenergy(t, v, rover):
     return energy * 6
     
 def simulate_rover(rover, planet, experiment, end_event):
+    from statistics import mean
     if type(rover) == dict:
         if type(planet) == dict:
             if type(experiment) == dict:
@@ -289,33 +290,28 @@ def simulate_rover(rover, planet, experiment, end_event):
 
                     fun = lambda t, y: rover_dynamics(t, y, rover, planet, experiment)
                     from scipy import integrate
-                    sol = integrate.solve_ivp(fun, t, y, method='RK45')
+                    sol = integrate.solve_ivp(fun, t, y, method='RK45', events=events)
                     T = sol.t
                     y0 = sol.y[0, :]
-                    y1 = sol.y[1, :0]
+                    y1 = sol.y[1, :]
                     Power = mechpower(y0, rover)
                     E = battenergy(T, y0, rover)
-                    sum1 = 0
+                    total_dist = mean(y0)*T[-1]
 
-                    for i in np.nditer(y0):
-                        sum1 += i
-                    avg = sum1 / len(y0)
-                    pos = avg *T[-1]
-                    distance = y1[-1]
-
-                    bpd = E / distance
                     telemetry = {}
-                    telemetry['Time'] = t
-                    telemetry['completion time']= T
-                    telemetry['velocty'] = t*y1
-                    telemetry['position']= pos
-                    telemetry['distance_traveled']=
-                    telemetry['max_velocity']= max(vel)
-                    telemetry['average_velocity'] = avg
+                    telemetry['Time'] = T
+                    telemetry['completion time']= T[-1]
+                    telemetry['velocty'] = y0
+                    telemetry['position']= y1
+                    telemetry['distance_traveled']= total_dist
+                    telemetry['max_velocity']= max(y0)
+                    telemetry['average_velocity'] = mean(y0)
                     telemetry['power']= Power
                     telemetry['bettery_energy']= E
-                    telemetry['energy_per_distant']= E/pos
+                    telemetry['energy_per_distant']= E/total_dist
                     rover['telemetry'] = telemetry
+
+
 
                 else:
                     raise Exception("end_event must be a dictionary")
@@ -327,6 +323,12 @@ def simulate_rover(rover, planet, experiment, end_event):
         raise Exception("rover must be a dictionary")
     return rover
 
+rover = simulate_rover(rover, planet, experiment, end_event)
+
+print(rover['telemetry'])
+v = np.array([.33, .32, .33, .2, .2, .25, .28])
+t = np.array([0, 1, 2, 3, 4, 5, 6])
+energy = battenergy(t, v, rover)
 
 
 m = get_mass(rover)
