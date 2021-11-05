@@ -249,28 +249,25 @@ def mechpower(v, rover):
     
 
 
-def battenergy(t,v,rover):
+def battenergy(t, v, rover):
+    import scipy
+    from scipy.integrate import trapz
     if type(v) == np.ndarray:
         if type(t) == np.ndarray:
             if len(v) == len(t):
-                if type(rover)== dict:
-                    from scipy import interpolate
-                    tau = tau_dcmotor(motorW(np.array([.33, .32, .33, .2, .2, .25, .28]), rover), motor)
-                    P = mechpower(np.array([.33, .32, .33, .2, .2, .25, .28]), rover)
-                    f = interpolate.interp1d(rover['wheel_assembly']['motor']['effcy_tau'],rover['wheel_assembly']['motor']['effcy'])
-                    effic = f(tau)
-                    power_battery = []
-                    for i in range(len(P)-1):
-                        power_battery.append(P[i]/effic[i])
-                    energy = 0
-                    for i in range(len(power_battery)-1):
-                        x1=t[i]
-                        x2=t[i+1]
-                        y=power_battery[i+1]
-                        add_energy=(x2-x1)*y
-                        energy = energy+add_energy
-                        
-                    
+                if type(rover) == dict:
+                    P = mechpower(v, rover)
+                    effcy_fun = interp1d(rover['wheel_assembly']['motor']['effcy_tau'],
+                                             rover['wheel_assembly']['motor']['effcy'])
+
+                    p_list=np.ndarray([0])
+                    for i in range(len(t)):
+                        omega = motorW(float(v[i]), rover)
+                        tau = tau_dcmotor(omega, motor)
+                        effcy = effcy_fun(tau)
+                        p_batt = (P[i]/effcy)
+                        p_list = np.append(p_list, p_batt)
+                    energy = scipy.integrate.trapz(p_list, t)
                 else:
                     raise Exception("rover is not a dictionary")
             else:
@@ -279,7 +276,7 @@ def battenergy(t,v,rover):
             raise Exception("t is not a 1D numpy array")
     else:
         raise Exception("v is not a 1D numpy array")
-    return energy*6
+    return energy * 6
     
 def simulate_rover(rover, planet, experiment, end_event):
     if type(rover) == dict:
