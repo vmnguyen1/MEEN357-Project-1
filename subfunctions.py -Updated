@@ -329,7 +329,7 @@ print(rover['telemetry'])
 v = np.array([.33, .32, .33, .2, .2, .25, .28])
 t = np.array([0, 1, 2, 3, 4, 5, 6])
 energy = battenergy(t, v, rover)
-
+print('Energy is', energy)
 
 m = get_mass(rover)
 Ng = get_gear_ratio(speed_reducer)
