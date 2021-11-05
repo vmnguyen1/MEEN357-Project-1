@@ -145,7 +145,6 @@ def F_rolling(w_out, terrain_angle, rover, planet, Crr):
             raise Exception('Rover and planet inputs must be in form of a dictionary')
     else:
         raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
-    #
 
 
 def F_net(omega, terrain_angle, rover, planet, Crr):
@@ -183,8 +182,6 @@ def F_net(omega, terrain_angle, rover, planet, Crr):
         raise Exception('Values for Omega and terrain angle must be either scalars or vectors')
 
 
-v = .1
-
 
 def motorW(v, rover):
     if type(v) == np.ndarray or type(v) == int or type(v) == float:
@@ -200,7 +197,6 @@ def motorW(v, rover):
 
 
 def rover_dynamics(t, y, rover, planet, experiment):
-#    if type(t) == int or type(t) == float:
         if type(y) == np.ndarray:
             if type(rover) == dict:
                 if type(planet) == dict:
@@ -236,13 +232,6 @@ def rover_dynamics(t, y, rover, planet, experiment):
                 raise Exception("rover must be a dictionary")
         else:
             raise Exception("y must be a 1D numpy array")
-#    else:
-#        raise Exception("t must be a scalar")
-
-
-# t = 0
-# y = np.array([0.33, 0])
-# print(rover_dynamics(t, y, rover, planet, experiment))
 
 
 def mechpower(v, rover):
@@ -324,6 +313,9 @@ def end_of_mission_event(end_event):
     return events
 
 def simulate_rover(rover, planet, experiment, end_event):
+    '''
+    inputs: 
+    '''
     from statistics import mean
     if type(rover) == dict:
         if type(planet) == dict:
@@ -352,7 +344,7 @@ def simulate_rover(rover, planet, experiment, end_event):
                     telemetry['max_velocity']= max(y0)
                     telemetry['average_velocity'] = mean(y0)
                     telemetry['power']= Power
-                    telemetry['bettery_energy']= E
+                    telemetry['battery_energy']= E
                     telemetry['energy_per_distant']= E/total_dist
                     rover['telemetry'] = telemetry
                 else:
@@ -365,13 +357,8 @@ def simulate_rover(rover, planet, experiment, end_event):
         raise Exception("rover must be a dictionary")
     return rover
 
-rover = simulate_rover(rover, planet, experiment, end_event)
 
-print(rover['telemetry'])
-v = np.array([.33, .32, .33, .2, .2, .25, .28])
-t = np.array([0, 1, 2, 3, 4, 5, 6])
-energy = battenergy(t, v, rover)
-print('Energy is', energy)
+
 
 m = get_mass(rover)
 Ng = get_gear_ratio(speed_reducer)
@@ -385,10 +372,12 @@ print('w_out is', w_out, 'rad/s')
 P = mechpower(np.array([.05, .25]), rover)
 print("\nP is", P, 'Watts')
 
-
+dydt = rover_dynamics(20, np.array([.25,500]), rover, planet, experiment)
+print('\ndydt is',dydt,'m/s')
 
 E = battenergy(np.array([0, 1, 2, 3, 4, 5, 6]), np.array([.33, .32, .33, .2, .2, .25, .28]), rover)
 print("\nE is", E, "Joules")
 
+rover = simulate_rover(rover, planet, experiment, end_event)
 
-
+print("\nThe telemetry dictionary is",rover['telemetry'])
